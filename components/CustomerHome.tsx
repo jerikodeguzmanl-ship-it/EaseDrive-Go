@@ -1,9 +1,9 @@
 'use client'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
 import CarArt from '@/components/CarArt'
 import PhoneFrame from '@/components/PhoneFrame'
 import MyLocation from '@/components/MyLocation'
+import HeroSlider from '@/components/HeroSlider'
 
 type Vehicle = {
   id: string
@@ -33,40 +33,8 @@ type Props = {
   heroImages: string[]
 }
 
-const slideColors = [
-  { glow: '#d6a21a', car: '#2a2a2a' },
-  { glow: '#7a8fa3', car: '#e9e9e9' },
-  { glow: '#4f7a5a', car: '#8a1f1f' },
-]
-
 export default function CustomerHome({ loggedIn, locationLabel, canEditLocation, view, vehicles, categories, category, query, heroImages }: Props) {
-  const [slide, setSlide] = useState(0)
-  const slideCount = heroImages.length || slideColors.length
-  useEffect(() => {
-    const timer = window.setInterval(() => setSlide((value) => (value + 1) % slideCount), 3500)
-    return () => window.clearInterval(timer)
-  }, [slideCount])
-
-  if (view === 'welcome') return <PhoneFrame>
-    <section className="welcome-hero">
-      <div className="slides" style={{ transform: `translateX(-${slide * 100}%)` }}>
-        {(heroImages.length ? heroImages : slideColors.map((item) => item.glow)).map((item, index) => {
-          const fallback = slideColors[index % slideColors.length]
-          return <div className="slide" key={item} style={{ background: heroImages.length ? `url("${item}") center / cover` : `radial-gradient(circle at 50% 35%, ${fallback.glow}55, #151515 70%)` }}>
-            {!heroImages.length && <CarArt color={fallback.car} />}
-          </div>
-        })}
-      </div>
-      <div className="welcome-brand"><i>E</i>EaseDrive Go</div>
-      <h1>Find Your Ride. Enjoy the Journey.</h1>
-      <p>Discover reliable vehicles for your next trip, available from trusted local rental partners.</p>
-      <div className="dots" aria-label={`Slide ${slide + 1}`}>
-        {(heroImages.length ? heroImages : slideColors).map((_, index) => <i className={index === slide ? 'on' : ''} key={index} />)}
-      </div>
-      <Link className="btn" href="/?view=explore#vehicles">Get Started</Link>
-      {!loggedIn && <p className="welcome-login">Already have an account? <Link href="/login">Log In</Link></p>}
-    </section>
-  </PhoneFrame>
+  if (view === 'welcome') return <PhoneFrame fullBleed><HeroSlider images={heroImages} loggedIn={loggedIn} /></PhoneFrame>
 
   return <PhoneFrame active="explore">
     <div className="customer-screen">

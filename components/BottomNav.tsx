@@ -3,15 +3,20 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 
-function Inner({ loggedIn }: { loggedIn: boolean }) {
+type DashboardRole = 'admin' | 'owner' | null
+
+function Inner({ loggedIn, role }: { loggedIn: boolean; role: DashboardRole }) {
   const p = usePathname(), sp = useSearchParams()
   if (p.startsWith('/partner') || p.startsWith('/admin')) return null
   const explore = (p === '/' && sp.get('view') === 'explore') || p.startsWith('/vehicles')
+  const dashboardHref = role === 'admin' ? '/admin' : role === 'owner' ? '/partner' : null
+  const dashboardLabel = role === 'admin' ? 'Admin' : 'Partner'
   return (<nav className="bnav" aria-label="Main">
     <Link href="/" className={p === '/' && !explore ? 'on' : ''}>Home</Link>
     <Link href="/?view=explore" className={explore ? 'on' : ''}>Explore</Link>
     <Link href={loggedIn ? '/bookings' : '/login?next=/bookings'} className={p.startsWith('/bookings') ? 'on' : ''}>Bookings</Link>
+    {dashboardHref && <Link href={dashboardHref} aria-label={`${dashboardLabel} dashboard`}>{dashboardLabel}</Link>}
     {loggedIn ? <form action="/auth/signout" method="post"><button>Log out</button></form> : <Link href="/login" className={p.startsWith('/login') ? 'on' : ''}>Log in</Link>}
   </nav>)
 }
-export default function BottomNav(props: { loggedIn: boolean }) { return <Suspense fallback={null}><Inner {...props} /></Suspense> }
+export default function BottomNav(props: { loggedIn: boolean; role: DashboardRole }) { return <Suspense fallback={null}><Inner {...props} /></Suspense> }

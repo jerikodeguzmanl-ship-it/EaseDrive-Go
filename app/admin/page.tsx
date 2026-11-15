@@ -8,6 +8,7 @@ import SettingsPanel from '@/components/SettingsPanel'
 import EditPartner from '@/components/EditPartner'
 import AddVehicleForm from '@/components/AddVehicleForm'
 import { AdminBookingLocationControl } from '@/components/BookingLiveMap'
+import BookingRefresh from '@/components/BookingRefresh'
 import { P, range, tone } from '@/lib/format'
 
 export default async function Admin() {
@@ -16,12 +17,12 @@ export default async function Admin() {
   const [customersN, partnersN, pendingApps, vehiclesN, bookings, pendingBk, confirmed, completed, cancelledBk] = await Promise.all([
     cnt('profiles', (q) => q.eq('role', 'customer')), cnt('business_owners', (q) => q.eq('status', 'Approved')), cnt('partner_applications', (q) => q.not('status', 'in', '("Approved","Rejected")')),
     cnt('vehicles'), cnt('bookings'), cnt('bookings', (q) => q.in('status', ['Pending', 'Under Review'])), cnt('bookings', (q) => q.in('status', ['Approved', 'Confirmed'])), cnt('bookings', (q) => q.eq('status', 'Completed')), cnt('bookings', (q) => q.in('status', ['Cancelled', 'Rejected', 'Expired']))])
-  const [{ data: apps }, { data: owners }, { data: customers }, { data: vehicles }, { data: bks }, { data: ids }, { data: hero }, { data: settings }, { data: logs }] = await Promise.all([
+  const [{ data: apps }, { data: owners }, { data: customers }, { data: vehicles }, { data: bks, error: bookingsError }, { data: ids }, { data: hero }, { data: settings }, { data: logs }] = await Promise.all([
     sb.from('partner_applications').select('*, business_documents(id,kind,verified)').order('created_at', { ascending: false }),
     sb.from('business_owners').select('*').order('created_at', { ascending: false }),
     sb.from('profiles').select('id,full_name,phone,email,suspended,created_at').eq('role', 'customer').order('created_at', { ascending: false }),
     sb.from('vehicles').select('id,name,status,model_year,category,business_owners(business_name),vehicle_rates(self_drive_rate,with_driver_rate)').order('created_at', { ascending: false }),
-    sb.from('bookings').select('*, vehicles(name), business_owners(business_name), profiles(full_name,phone)').order('created_at', { ascending: false }).limit(100),
+    sb.from('bookings').select('*, vehicles(name), business_owners(business_name), profiles!bookings_customer_id_fkey(full_name,phone)').order('created_at', { ascending: false }).limit(100),
     sb.from('customer_ids').select('id,customer_id,status,id_type,created_at').order('created_at', { ascending: false }),
     sb.from('hero_images').select('id,storage_path,sort').order('sort'),
     sb.from('platform_settings').select('*'),
@@ -69,15 +70,15 @@ export default async function Admin() {
               {v.status !== 'Archived' && <Action url={`/api/vehicles/${v.id}`} body={{ status: 'Archived' }} label="Archive" className="btn sm dk" confirmMsg="Archive this vehicle?" />}
               <Action url={`/api/admin/vehicles/${v.id}`} method="DELETE" label="Delete" className="btn sm dk" confirmMsg="Delete this vehicle permanently? Vehicles with bookings must be archived instead." /></td></tr> })}</tbody></table></div>}</div></section>
 
-      <section id="bookings" className="dashboard-section">{H('b', 'Bookings', 'Approve or reject any booking (a customer valid ID is required), cancel, complete or delete.')}
-        <div className="panel">{!bks?.length ? <div className="empty">No bookings yet.</div> : <div className="tw"><table className="t"><thead><tr><th>Ref</th><th>Customer / ID</th><th>Vehicle / partner</th><th>Dates</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>{bks.map((b: any) => <tr key={b.id}>
+      <section id="bookings" className="dashboard-section">{H('b', 'Bookings', 'Approve or reject any booking (a customer valid ID is required), cancel, complete or delete.', <BookingRefresh />)}
+        <div className="panel">{bookingsError ? <div className="err" role="alert">Could not load bookings: {bookingsError.message}</div> : !bks?.length ? <div className="empty">No bookings yet.</div> : <div className="tw"><table className="t"><thead><tr><th>Ref</th><th>Customer / ID</th><th>Vehicle / partner</th><th>Dates</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>{bks.map((b: any) => <tr key={b.id}>
           <td>{b.ref}</td><td>{b.profiles?.full_name}<br /><small>{b.profiles?.phone}</small><div style={{ marginTop: 6 }}><IdReview customerId={b.customer_id} row={idOf(b.customer_id)} /></div></td><td>{b.vehicles?.name}<br /><small>{b.business_owners?.business_name}</small></td><td><small>{b.service === 'self_drive' ? 'Self Drive' : 'With Driver'}<br />{range(b.period)}</small></td><td>{P(b.total)}</td><td><span className={'pill ' + tone(b.status)}>{b.status}</span></td>
           <td>{['Pending', 'Under Review'].includes(b.status) && <><Action url={`/api/bookings/${b.id}`} body={{ action: 'approve' }} label="Approve" /><Action url={`/api/bookings/${b.id}`} body={{ action: 'reject' }} ask="Reason for rejection?" label="Reject" className="btn sm dk" /></>}
             {b.status === 'Confirmed' && <><AdminBookingLocationControl bookingId={b.id} status={b.status} /><Action url={`/api/bookings/${b.id}`} body={{ action: 'complete' }} label="Complete" confirmMsg="Mark as completed?" /></>}
             {['Pending', 'Under Review', 'Approved', 'Confirmed'].includes(b.status) && <Action url={`/api/bookings/${b.id}`} body={{ action: 'cancel' }} label="Cancel" className="btn sm dk" confirmMsg="Cancel this booking?" />}
             {['Cancelled', 'Rejected', 'Expired', 'Completed'].includes(b.status) && <Action url={`/api/admin/bookings/${b.id}`} method="DELETE" label="Delete" className="btn sm dk" confirmMsg="Delete this booking record permanently?" />}</td></tr>)}</tbody></table></div>}</div></section>
 
-      <section id="homepage" className="dashboard-section">{H('h', 'Front page images', 'These slides appear on the welcome screen of the app.')}<HeroManager images={(hero ?? []) as any} /></section>
+      <section id="homepage" className="dashboard-section">{H('h', 'Front page images', 'The first three uploaded images replace the matching built-in homepage carousel photos.')}<HeroManager images={(hero ?? []) as any} /></section>
       <section id="settings" className="dashboard-section">{H('s', 'Settings', 'Booking and listing rules.')}<SettingsPanel expiry={Number(st.pending_expiry_hours ?? 24)} review={st.require_vehicle_review !== false} /></section>
       <section id="activity" className="dashboard-section">{H('l', 'Activity log', 'Recent administrative and platform events.')}<div className="panel">{logs?.length ? logs.map((l: any) => <div key={l.id} className="activity-row"><small>{new Date(l.created_at).toLocaleString()} · {l.action} · {l.entity} {String(l.entity_id).slice(0, 8)}</small></div>) : <div className="empty">No recent activity.</div>}</div></section>
     </div></div>)
